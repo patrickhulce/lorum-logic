@@ -1,0 +1,16 @@
+{
+  "name": "lorum-logic",
+  "version": "0.0.0",
+  "authors": [
+    "Patrick Hulce <patrick.hulce@gmail.com>"
+  ],
+  "description": "Shared UI logic and controllers for lorum app.",
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
