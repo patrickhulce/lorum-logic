@@ -1,10 +1,12 @@
 angular.module('lorum.logic.controllers.games.detail', []).
-  controller('GameDetailCtrl', ['$scope', '$stateParams', '$state', 'GamesService',
-    function ($scope, $stateParams, $state, Games) {
+  controller('GameDetailCtrl',
+    ['$scope', '$stateParams', '$state', 'LorumConfig', 'GamesService',
+    function ($scope, $stateParams, $state, Config, Games) {
       $scope.game = null;
       $scope.ui = {
         isLoading: false
       };
+
       $scope.reload = function () {
         $scope.ui.isLoading = true;
         Games.fetchById($stateParams.gameId).
@@ -14,10 +16,10 @@ angular.module('lorum.logic.controllers.games.detail', []).
             $scope.ui.isLoading = false;
           }).
           error(function (error) {
-            $state.go('games.all');
+            $state.go(Config.getView('games.all'));
           });
       };
 
       $scope.reload();
-      $scope.$on('$ionicView.enter', $scope.reload);
+      Config.hooks('GameDetailCtrl', $scope);
   }]);

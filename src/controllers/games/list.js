@@ -13,5 +13,5 @@ angular.module('lorum.logic.controllers.games.list', []).
       };
 
       $scope.reload();
-      $scope.$on('$ionicView.enter', $scope.reload);
+      Config.hooks('GameListCtrl', $scope);
   }]);

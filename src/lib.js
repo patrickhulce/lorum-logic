@@ -1,4 +1,5 @@
 angular.module('lorum.logic', [
+  'lorum.logic.config',
   'lorum.logic.controllers.games.detail',
   'lorum.logic.controllers.games.list',
   'lorum.logic.controllers.games.new',

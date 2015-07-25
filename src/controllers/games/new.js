@@ -28,9 +28,10 @@ angular.module('lorum.logic.controllers.games.new', []).
       $scope.save = function () {
         Games.create($scope.name, $scope.playerIds, !$scope.isRanked).
           success(function (game) {
-            $state.go('tab.games-detail', {
+            $state.go(Config.getView('games.detail'), {
               gameId: game.id
             });
           });
       };
+      Config.hooks('GameNewCtrl', $scope);
   }]);

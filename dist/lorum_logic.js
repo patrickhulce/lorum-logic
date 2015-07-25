@@ -1,10 +1,42 @@
+angular.module('lorum.logic.config', []).provider('LorumConfig', function () {
+  this.views = {};
+  this.hooks = [];
+
+  this.addView = function (viewName, url) {
+    this.views[viewName] = url;
+  };
+
+  this.addHook = function (ctrlName, hookFunc) {
+    this.hooks.push({controller: ctrlName, hook: hookFunc});
+  };
+
+  this.$get = function () {
+    var views = this.views;
+    var hooks = this.hooks;
+    return {
+      getView: function (viewName) {
+        return views[viewName] || viewName;
+      },
+      hook: function (ctrlName, $scope) {
+        hooks.filter(function (hookDef) {
+          return ctrlName === hookDef.controller;
+        }).forEach(function (hookDef) {
+          hookDef.hook($scope);
+        });
+      }
+    };
+  };
+});
+
 angular.module('lorum.logic.controllers.games.detail', []).
-  controller('GameDetailCtrl', ['$scope', '$stateParams', '$state', 'GamesService',
-    function ($scope, $stateParams, $state, Games) {
+  controller('GameDetailCtrl',
+    ['$scope', '$stateParams', '$state', 'LorumConfig', 'GamesService',
+    function ($scope, $stateParams, $state, Config, Games) {
       $scope.game = null;
       $scope.ui = {
         isLoading: false
       };
+
       $scope.reload = function () {
         $scope.ui.isLoading = true;
         Games.fetchById($stateParams.gameId).
@@ -14,12 +46,12 @@ angular.module('lorum.logic.controllers.games.detail', []).
             $scope.ui.isLoading = false;
           }).
           error(function (error) {
-            $state.go('games.all');
+            $state.go(Config.getView('games.all'));
           });
       };
 
       $scope.reload();
-      $scope.$on('$ionicView.enter', $scope.reload);
+      Config.hooks('GameDetailCtrl', $scope);
   }]);
 
 angular.module('lorum.logic.controllers.games.list', []).
@@ -37,7 +69,7 @@ angular.module('lorum.logic.controllers.games.list', []).
       };
 
       $scope.reload();
-      $scope.$on('$ionicView.enter', $scope.reload);
+      Config.hooks('GameListCtrl', $scope);
   }]);
 
 angular.module('lorum.logic.controllers.games.new', []).
@@ -70,11 +102,12 @@ angular.module('lorum.logic.controllers.games.new', []).
       $scope.save = function () {
         Games.create($scope.name, $scope.playerIds, !$scope.isRanked).
           success(function (game) {
-            $state.go('tab.games-detail', {
+            $state.go(Config.getView('games.detail'), {
               gameId: game.id
             });
           });
       };
+      Config.hooks('GameNewCtrl', $scope);
   }]);
 
 angular.module('lorum.logic.controllers.games.scores', []).
@@ -211,6 +244,8 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
         $scope.ui.isLoading = false;
       }, true);
+
+      Config.hooks('GameScoresCtrl', $scope);
     }]);
 
 angular.module('lorum.logic.helpers.logic', []).factory('LorumLogic', function () {
@@ -287,6 +322,7 @@ angular.module('lorum.logic.helpers.logic', []).factory('LorumLogic', function (
 });
 
 angular.module('lorum.logic', [
+  'lorum.logic.config',
   'lorum.logic.controllers.games.detail',
   'lorum.logic.controllers.games.list',
   'lorum.logic.controllers.games.new',
@@ -296,6 +332,7 @@ angular.module('lorum.logic', [
   'lorum.logic.services.games',
   'lorum.logic.services.users'
 ]);
+
 angular.module('lorum.logic.models.game', []).
   factory('GameModel', function () {
     var nextHand = function (handMeta) {

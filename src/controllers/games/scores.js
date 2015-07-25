@@ -132,4 +132,6 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
         $scope.ui.isLoading = false;
       }, true);
+
+      Config.hooks('GameScoresCtrl', $scope);
     }]);
