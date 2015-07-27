@@ -17,7 +17,7 @@ angular.module('lorum.logic.config', []).provider('LorumConfig', function () {
       getView: function (viewName) {
         return views[viewName] || viewName;
       },
-      hook: function (ctrlName, $scope) {
+      hooks: function (ctrlName, $scope) {
         hooks.filter(function (hookDef) {
           return ctrlName === hookDef.controller;
         }).forEach(function (hookDef) {

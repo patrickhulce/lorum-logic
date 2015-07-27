@@ -1,6 +1,6 @@
 angular.module('lorum.logic.controllers.games.scores', []).
-  controller('GameScoresCtrl', ['$scope', 'GamesService', 'LorumLogic',
-    function ($scope, Games, LorumLogic) {
+  controller('GameScoresCtrl', ['$scope', 'LorumConfig', 'GamesService', 'LorumLogic',
+    function ($scope, Config, Games, LorumLogic) {
       var scoresObj = function (players, score) {
         if (!score) score = 0;
         return _(players).
@@ -11,9 +11,6 @@ angular.module('lorum.logic.controllers.games.scores', []).
       };
 
       $scope.gameNames = LorumLogic.GameTypeNames;
-
-      $scope.individualScores = [];
-      $scope.totalScores = [];
 
       var ui = {
         activeRound: 1,
@@ -59,8 +56,8 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
       $scope.scoreFor = function (playerId, handMeta) {
         if (!handMeta) handMeta = $scope.game && $scope.game.getLastCompletedHandMetadata();
-        if (!handMeta) return '-';
-        return $scope.totalScores[handMeta.round - 1][handMeta.gameType - 1][playerId];
+        if (!handMeta || !$scope.gameData) return '-';
+        return $scope.gameData.totalScoresMatrix[handMeta.round - 1][handMeta.gameType - 1][playerId];
       };
 
       $scope.selectUser = function (playerId) {
@@ -77,7 +74,7 @@ angular.module('lorum.logic.controllers.games.scores', []).
         ui.activeGameType = gameType;
         ui.isMoonShotUIActive = false;
 
-        var scores = $scope.individualScores[round - 1][gameType - 1];
+        var scores = $scope.gameData.individualScoresMatrix[round - 1][gameType - 1];
         forms.nextScores = scores;
         forms.selectedUser = -1;
 
@@ -90,10 +87,6 @@ angular.module('lorum.logic.controllers.games.scores', []).
           forms.selectedUser = _.findKey(scores, function (x) {
             return x === 0;
           });
-        }
-
-        if ($scope.setView) {
-          $scope.setView('record');
         }
       };
 
@@ -125,11 +118,7 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
       $scope.$watch('game', function (game) {
         if (!game || !game.hands) return;
-
         $scope.resetUIState();
-        $scope.individualScores = game.getIndividualScoresMatrix();
-        $scope.totalScores = game.getRunningTotalScoresMatrix();
-
         $scope.ui.isLoading = false;
       }, true);
 

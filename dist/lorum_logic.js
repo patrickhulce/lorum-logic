@@ -17,7 +17,7 @@ angular.module('lorum.logic.config', []).provider('LorumConfig', function () {
       getView: function (viewName) {
         return views[viewName] || viewName;
       },
-      hook: function (ctrlName, $scope) {
+      hooks: function (ctrlName, $scope) {
         hooks.filter(function (hookDef) {
           return ctrlName === hookDef.controller;
         }).forEach(function (hookDef) {
@@ -33,6 +33,7 @@ angular.module('lorum.logic.controllers.games.detail', []).
     ['$scope', '$stateParams', '$state', 'LorumConfig', 'GamesService',
     function ($scope, $stateParams, $state, Config, Games) {
       $scope.game = null;
+      $scope.gameData = null;
       $scope.ui = {
         isLoading: false
       };
@@ -42,7 +43,6 @@ angular.module('lorum.logic.controllers.games.detail', []).
         Games.fetchById($stateParams.gameId).
           success(function (result) {
             $scope.game = result;
-            $scope.gameData = result.serialize();
             $scope.ui.isLoading = false;
           }).
           error(function (error) {
@@ -50,34 +50,25 @@ angular.module('lorum.logic.controllers.games.detail', []).
           });
       };
 
+      $scope.$watch('game', function (game) {
+        if (!game) return;
+        $scope.gameData = game.serialize();
+      }, true);
+
       $scope.reload();
       Config.hooks('GameDetailCtrl', $scope);
   }]);
 
-angular.module('lorum.logic.controllers.games.list', []).
-  controller('GameListCtrl', ['$scope', 'GamesService',
-    function ($scope, Games) {
-      $scope.games = [];
-      $scope.isLoading = false;
-
-      $scope.reload = function () {
-        $scope.isLoading = true;
-        Games.fetchAll().success(function (result) {
-          $scope.isLoading = false;
-          $scope.games = result;
-        });
-      };
-
-      $scope.reload();
-      Config.hooks('GameListCtrl', $scope);
-  }]);
-
-angular.module('lorum.logic.controllers.games.new', []).
-  controller('GameNewCtrl', ['$scope', '$state', 'GamesService', 'UsersService',
-    function ($scope, $state, Games, Users) {
+angular.module('lorum.logic.controllers.games.edit', []).
+  controller('GameEditCtrl', ['$scope', '$state', 'LorumConfig', 'GamesService', 'UsersService',
+    function ($scope, $state, Config, Games, Users) {
+      var isNew = !$state.params.gameId;
+      $scope.isNew = isNew;
       $scope.name = '';
       $scope.playerIds = [];
       $scope.isRanked = true;
+      $scope._game = {};
+      $scope.ui = {isLoading: !isNew};
 
       $scope.availableUsers = [];
       Users.fetchAll().success(function (results) {
@@ -100,19 +91,57 @@ angular.module('lorum.logic.controllers.games.new', []).
       };
 
       $scope.save = function () {
-        Games.create($scope.name, $scope.playerIds, !$scope.isRanked).
-          success(function (game) {
-            $state.go(Config.getView('games.detail'), {
-              gameId: game.id
-            });
+        var promise = isNew ?
+          Games.create($scope.name, $scope.playerIds, !$scope.isRanked) :
+          Games.update($scope._game.id, $scope.name, $scope.playerIds);
+
+        promise.success(function (game) {
+          $state.go(Config.getView('games.detail'), {
+            gameId: $scope._game.id || game.id
           });
+        });
       };
-      Config.hooks('GameNewCtrl', $scope);
+
+      if (!isNew) {
+        Games.fetchById($state.params.gameId).
+          success(function (result) {
+            $scope.name = result.name;
+            $scope.playerIds = _(result.players).
+              filter('userGames.isActive').
+              sortBy('userGames.position').
+              pluck('id').value();
+            $scope._game = result;
+            $scope.ui.isLoading = false;
+          }).
+          error(function (error) {
+            $state.go(Config.getView('games.all'));
+          });
+      }
+
+      Config.hooks('GameEditCtrl', $scope);
+  }]);
+
+angular.module('lorum.logic.controllers.games.list', []).
+  controller('GameListCtrl', ['$scope', 'LorumConfig', 'GamesService',
+    function ($scope, Config, Games) {
+      $scope.games = [];
+      $scope.isLoading = false;
+
+      $scope.reload = function () {
+        $scope.isLoading = true;
+        Games.fetchAll().success(function (result) {
+          $scope.isLoading = false;
+          $scope.games = result;
+        });
+      };
+
+      $scope.reload();
+      Config.hooks('GameListCtrl', $scope);
   }]);
 
 angular.module('lorum.logic.controllers.games.scores', []).
-  controller('GameScoresCtrl', ['$scope', 'GamesService', 'LorumLogic',
-    function ($scope, Games, LorumLogic) {
+  controller('GameScoresCtrl', ['$scope', 'LorumConfig', 'GamesService', 'LorumLogic',
+    function ($scope, Config, Games, LorumLogic) {
       var scoresObj = function (players, score) {
         if (!score) score = 0;
         return _(players).
@@ -123,9 +152,6 @@ angular.module('lorum.logic.controllers.games.scores', []).
       };
 
       $scope.gameNames = LorumLogic.GameTypeNames;
-
-      $scope.individualScores = [];
-      $scope.totalScores = [];
 
       var ui = {
         activeRound: 1,
@@ -171,8 +197,8 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
       $scope.scoreFor = function (playerId, handMeta) {
         if (!handMeta) handMeta = $scope.game && $scope.game.getLastCompletedHandMetadata();
-        if (!handMeta) return '-';
-        return $scope.totalScores[handMeta.round - 1][handMeta.gameType - 1][playerId];
+        if (!handMeta || !$scope.gameData) return '-';
+        return $scope.gameData.totalScoresMatrix[handMeta.round - 1][handMeta.gameType - 1][playerId];
       };
 
       $scope.selectUser = function (playerId) {
@@ -189,7 +215,7 @@ angular.module('lorum.logic.controllers.games.scores', []).
         ui.activeGameType = gameType;
         ui.isMoonShotUIActive = false;
 
-        var scores = $scope.individualScores[round - 1][gameType - 1];
+        var scores = $scope.gameData.individualScoresMatrix[round - 1][gameType - 1];
         forms.nextScores = scores;
         forms.selectedUser = -1;
 
@@ -202,10 +228,6 @@ angular.module('lorum.logic.controllers.games.scores', []).
           forms.selectedUser = _.findKey(scores, function (x) {
             return x === 0;
           });
-        }
-
-        if ($scope.setView) {
-          $scope.setView('record');
         }
       };
 
@@ -237,16 +259,21 @@ angular.module('lorum.logic.controllers.games.scores', []).
 
       $scope.$watch('game', function (game) {
         if (!game || !game.hands) return;
-
         $scope.resetUIState();
-        $scope.individualScores = game.getIndividualScoresMatrix();
-        $scope.totalScores = game.getRunningTotalScoresMatrix();
-
         $scope.ui.isLoading = false;
       }, true);
 
       Config.hooks('GameScoresCtrl', $scope);
     }]);
+
+angular.module('lorum.logic.controllers.settings', []).
+  controller('SettingsCtrl', ['$scope', 'LorumConfig',
+    function ($scope, Config) {
+      $scope.games = [];
+      $scope.isLoading = false;
+
+      Config.hooks('SettingsCtrl', $scope);
+  }]);
 
 angular.module('lorum.logic.helpers.logic', []).factory('LorumLogic', function () {
   var gt = {
@@ -325,8 +352,9 @@ angular.module('lorum.logic', [
   'lorum.logic.config',
   'lorum.logic.controllers.games.detail',
   'lorum.logic.controllers.games.list',
-  'lorum.logic.controllers.games.new',
+  'lorum.logic.controllers.games.edit',
   'lorum.logic.controllers.games.scores',
+  'lorum.logic.controllers.settings',
   'lorum.logic.helpers.logic',
   'lorum.logic.models.game',
   'lorum.logic.services.games',
@@ -383,7 +411,7 @@ angular.module('lorum.logic.models.game', []).
               return player.userGames.position;
             }).value();
           },
-          getIndividualScoresMatrix: function () {
+          _getHandsMatrix: function () {
             return _(this.hands || []).
               groupBy('round').
               values().
@@ -391,28 +419,47 @@ angular.module('lorum.logic.models.game', []).
                 return _(round).
                   groupBy('gameType').
                   values().
-                  map(function (hand) {
-                    return _(hand).
-                      indexBy('scorerId').
-                      mapValues('score').
-                      value();
-                  }).
                   value();
               }).value();
           },
+          _mutateHands: function (mutate) {
+            return _.map(this._getHandsMatrix(), function (round) {
+              return _.map(round, mutate);
+            });
+          },
+          getActivePlayersMatrix: function () {
+            var playerPositions = _(this.players).
+              indexBy('id').
+              mapValues('userGames.position').
+              value();
+            return this._mutateHands(function (hand) {
+              return _(hand).sortBy(function (trick) {
+                return playerPositions[trick.scorerId];
+              }).pluck('scorerId').value();
+            });
+          },
+          getIndividualScoresMatrix: function () {
+            return this._mutateHands(function (hand) {
+              return _(hand).
+                indexBy('scorerId').
+                mapValues('score').
+                value();
+            });
+          },
           getRunningTotalScoresMatrix: function () {
-            var activePlayers = this.getActivePlayers();
-
-            var runningTotal = [];
+            var activePlayers = this.getActivePlayersMatrix();
+            var runningTotal = [0, 0, 0, 0];
             var totalScores = [];
             this.getIndividualScoresMatrix().forEach(function (round, i) {
               round.forEach(function (score, j) {
                 if (!totalScores[i]) totalScores[i] = [];
-                activePlayers.forEach(function (player) {
-                  runningTotal[player.id] = (runningTotal[player.id] || 0) +
-                    score[player.id];
+                var handScore = {};
+                activePlayers[i][j].forEach(function (playerId, k) {
+                  var newTotal = runningTotal[k] + score[playerId];
+                  runningTotal[k] = newTotal;
+                  handScore[playerId] = newTotal;
                 });
-                totalScores[i][j] = _.assign({}, runningTotal);
+                totalScores[i][j] = handScore;
               });
             });
             return totalScores;
@@ -454,7 +501,10 @@ angular.module('lorum.logic.models.game', []).
             return _.extend({}, _data, {
               activePlayers: this.getActivePlayers(),
               lastCompletedHandMeta: this.getLastCompletedHandMetadata(),
-              currentHandMeta: this.getCurrentHandMetadata()
+              currentHandMeta: this.getCurrentHandMetadata(),
+              individualScoresMatrix: this.getIndividualScoresMatrix(),
+              totalScoresMatrix: this.getRunningTotalScoresMatrix(),
+              activePlayersMatrix: this.getActivePlayersMatrix()
             });
           }
         });

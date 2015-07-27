@@ -1,6 +1,6 @@
 angular.module('lorum.logic.controllers.games.list', []).
-  controller('GameListCtrl', ['$scope', 'GamesService',
-    function ($scope, Games) {
+  controller('GameListCtrl', ['$scope', 'LorumConfig', 'GamesService',
+    function ($scope, Config, Games) {
       $scope.games = [];
       $scope.isLoading = false;
 

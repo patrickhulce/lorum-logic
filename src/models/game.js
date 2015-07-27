@@ -48,7 +48,7 @@ angular.module('lorum.logic.models.game', []).
               return player.userGames.position;
             }).value();
           },
-          getIndividualScoresMatrix: function () {
+          _getHandsMatrix: function () {
             return _(this.hands || []).
               groupBy('round').
               values().
@@ -56,28 +56,47 @@ angular.module('lorum.logic.models.game', []).
                 return _(round).
                   groupBy('gameType').
                   values().
-                  map(function (hand) {
-                    return _(hand).
-                      indexBy('scorerId').
-                      mapValues('score').
-                      value();
-                  }).
                   value();
               }).value();
           },
+          _mutateHands: function (mutate) {
+            return _.map(this._getHandsMatrix(), function (round) {
+              return _.map(round, mutate);
+            });
+          },
+          getActivePlayersMatrix: function () {
+            var playerPositions = _(this.players).
+              indexBy('id').
+              mapValues('userGames.position').
+              value();
+            return this._mutateHands(function (hand) {
+              return _(hand).sortBy(function (trick) {
+                return playerPositions[trick.scorerId];
+              }).pluck('scorerId').value();
+            });
+          },
+          getIndividualScoresMatrix: function () {
+            return this._mutateHands(function (hand) {
+              return _(hand).
+                indexBy('scorerId').
+                mapValues('score').
+                value();
+            });
+          },
           getRunningTotalScoresMatrix: function () {
-            var activePlayers = this.getActivePlayers();
-
-            var runningTotal = [];
+            var activePlayers = this.getActivePlayersMatrix();
+            var runningTotal = [0, 0, 0, 0];
             var totalScores = [];
             this.getIndividualScoresMatrix().forEach(function (round, i) {
               round.forEach(function (score, j) {
                 if (!totalScores[i]) totalScores[i] = [];
-                activePlayers.forEach(function (player) {
-                  runningTotal[player.id] = (runningTotal[player.id] || 0) +
-                    score[player.id];
+                var handScore = {};
+                activePlayers[i][j].forEach(function (playerId, k) {
+                  var newTotal = runningTotal[k] + score[playerId];
+                  runningTotal[k] = newTotal;
+                  handScore[playerId] = newTotal;
                 });
-                totalScores[i][j] = _.assign({}, runningTotal);
+                totalScores[i][j] = handScore;
               });
             });
             return totalScores;
@@ -119,7 +138,10 @@ angular.module('lorum.logic.models.game', []).
             return _.extend({}, _data, {
               activePlayers: this.getActivePlayers(),
               lastCompletedHandMeta: this.getLastCompletedHandMetadata(),
-              currentHandMeta: this.getCurrentHandMetadata()
+              currentHandMeta: this.getCurrentHandMetadata(),
+              individualScoresMatrix: this.getIndividualScoresMatrix(),
+              totalScoresMatrix: this.getRunningTotalScoresMatrix(),
+              activePlayersMatrix: this.getActivePlayersMatrix()
             });
           }
         });
